@@ -12,6 +12,7 @@ public class Program
 
 		// Добавление необходимых сервисов
 		builder.Services.AddAuthorization();
+		builder.Services.AddHttpClient<ChatHub>();
 		builder.Services.AddEndpointsApiExplorer();
 		builder.Services.AddSignalR();
 
