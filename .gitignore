@@ -1,0 +1,26 @@
+# Visual Studio файлы
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Стандартные временные файлы, кэш, результаты билда и папки
+bin/
+obj/
+*.log
+*.tlog
+*.cache
+*.pdb
+*.ilk
+*.aps
+*.ipch
+*.dll
+*.exe
+*.out
+*.iobj
+*.ipdb
+
+# Пакетные менеджеры
+node_modules/
+packages/
