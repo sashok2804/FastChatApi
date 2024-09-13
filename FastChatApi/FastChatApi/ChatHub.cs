@@ -1,6 +1,8 @@
 ﻿using Microsoft.AspNetCore.SignalR;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
+using System.Security.Claims;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Text;
 
 public class ChatHub : Hub
@@ -12,28 +14,83 @@ public class ChatHub : Hub
 		_httpClient = httpClient;
 	}
 
-	public async Task SendMessage(int roomId, int userId, string message)
+	// Получение имени пользователя из токена
+	private string GetUserNameFromToken(string token)
+	{
+		var handler = new JwtSecurityTokenHandler();
+		var jwtToken = handler.ReadJwtToken(token);
+
+		// Извлечение имени пользователя из токена 
+		var nameClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Name);
+		return nameClaim?.Value ?? "Unknown";
+	}
+
+	// Получение ID пользователя из токена
+	private string GetUserIdFromToken(string token)
+	{
+		var handler = new JwtSecurityTokenHandler();
+		var jwtToken = handler.ReadJwtToken(token);
+
+		// Извлечение ID пользователя из токена 
+		var idClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Sid);
+		return idClaim?.Value ?? "Unknown";
+	}
+
+
+	// Получение JWT токена из куки
+	private string GetTokenFromCookies()
+	{
+		if (Context.GetHttpContext().Request.Cookies.TryGetValue("Authorization", out var token))
+		{
+			return token.StartsWith("Bearer ") ? token.Substring(7) : token;
+		}
+		return null;
+	}
+
+	public async Task SendMessage(int roomId, string message, string token)
 	{
 		Console.WriteLine($"Attempting to send message to room {roomId}: {message}");
 
 		try
 		{
-			// Проверка существования комнаты
-			Console.WriteLine($"Sending message to group {roomId.ToString()}");
-			await Clients.Group(roomId.ToString()).SendAsync("ReceiveMessage", userId, message);
-			Console.WriteLine($"Message successfully sent to group {roomId}");
+			// Удаление префикса "Bearer " из токена, если он присутствует
+			if (token.StartsWith("Bearer "))
+			{
+				token = token.Substring(7);
+			}
 
-			// Создание объекта сообщения
+			// Если токен пустой, прекращаем выполнение
+			if (string.IsNullOrEmpty(token))
+			{
+				Console.WriteLine("JWT Token not provided.");
+				return;
+			}
+
+			// Извлекаем имя пользователя и ID пользователя из токена
+			var userName = GetUserNameFromToken(token);
+			var userId = GetUserIdFromToken(token);
+
+			if (string.IsNullOrEmpty(userName) || string.IsNullOrEmpty(userId))
+			{
+				Console.WriteLine("User name or user ID could not be retrieved from JWT.");
+				return;
+			}
+
+			// Отправка сообщения с именем пользователя
+			Console.WriteLine($"Sending message to group {roomId.ToString()}");
+			await Clients.Group(roomId.ToString()).SendAsync("ReceiveMessage", userName, message);
+			Console.WriteLine($"Message successfully sent to group {roomId}, {userName}");
+
+			// Сериализация объекта сообщения для API
 			var messagePayload = new
 			{
-				id = 0, // Используйте реальный идентификатор, если он есть
+				id = 0,
 				roomId = roomId,
 				userId = userId,
 				message = message,
 				messageDate = DateTime.UtcNow
 			};
 
-			// Сериализация объекта сообщения в JSON
 			var jsonContent = JsonSerializer.Serialize(messagePayload);
 			Console.WriteLine($"Serialized message payload: {jsonContent}");
 
@@ -50,6 +107,7 @@ public class ChatHub : Hub
 			Console.WriteLine($"Error sending message: {ex}");
 		}
 	}
+
 
 
 	public async Task JoinRoom(int roomId)
